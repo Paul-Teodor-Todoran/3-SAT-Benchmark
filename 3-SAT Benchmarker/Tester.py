@@ -76,37 +76,58 @@ def brute_force_solver(formula):
 
 def dp_solver(formula):
     """
-    Algoritmul Davis–Putnam cu memoizare, limită de pași și timeout.
-    Aruncă TimeoutError dacă se depășesc limitele.
+    Algoritmul Davis–Putnam cu memoizare, normalizare și detecție corectă a tautologiilor.
+    Aruncă TimeoutError dacă se depășesc limitele de timp sau pași.
     """
+
+    TIME_LIMIT = TIMEOUT_PER_SOLVER
+    STEP_LIMIT = MAX_DP_STEPS
     start = time.time()
+
+    def normalize_clause(clause):
+        return sorted(set(clause))
+
     def resolve(fm, seen, steps):
-        if time.time() - start > TIMEOUT_PER_SOLVER:
+        # Timeout global
+        if time.time() - start > TIME_LIMIT:
             raise TimeoutError("Timp depășit pentru DP")
+
         steps[0] += 1
-        if steps[0] > MAX_DP_STEPS:
+        if steps[0] > STEP_LIMIT:
             raise TimeoutError("Limită de pași depășită pentru DP")
-        sig = frozenset(frozenset(c) for c in fm)
+
+        # Normalizează formula pentru memoizare
+        sig = frozenset(frozenset(normalize_clause(c)) for c in fm)
         if sig in seen:
             return False
         seen.add(sig)
+
+        # Cazuri de oprire
         if not fm:
-            return True
+            return True  # Formula vidă → SAT
         if any(len(c) == 0 for c in fm):
-            return False
+            return False  # Clauză vidă → UNSAT
+
+        # Alegem un literal de rezolvat (prima variabilă disponibilă)
         x = abs(fm[0][0])
+
+        # Împărțim clauzele
         pos = [c for c in fm if x in c]
         neg = [c for c in fm if -x in c]
         rest = [c for c in fm if x not in c and -x not in c]
+
+        # Aplicăm rezoluție
         new = []
         for p in pos:
             for q in neg:
-                rc = [l for l in p if abs(l)!=x] + [l for l in q if abs(l)!=x]
+                rc = [l for l in p if abs(l) != x] + [l for l in q if abs(l) != x]
                 S = set(rc)
                 if any(-lit in S for lit in S):
-                    continue
-                new.append(list(dict.fromkeys(rc)))
+                    continue  # Tautologie, se ignoră
+                new.append(normalize_clause(rc))
+
         return resolve(rest + new, seen, steps)
+
     return resolve(formula, seen=set(), steps=[0])
 
 def dpll_solver(formula):
